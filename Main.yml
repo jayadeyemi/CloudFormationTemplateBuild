@@ -1,0 +1,801 @@
+# CloudFormation template
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Phase 1: CloudFormation template to set up an AWS Cloud Web
+  Application in a Public Subnet'
+
+Parameters:
+  AWSRegion:
+    Type: String
+    Description: The AWS region to deploy the resources in.
+    Default: us-east-1
+    AllowedValues:
+      - us-east-1
+      - us-east-2
+      - us-west-1
+      - us-west-2
+
+  Subnet1AZ:
+    Type: String
+    Description: Availability Zone for the first subnet
+    Default: us-east-1a
+    AllowedValues:
+      - ----------
+      - us-east-1a
+      - us-east-1b
+      - us-east-1c
+      - us-east-1d
+      - ---------
+      - us-east-2a
+      - us-east-2b
+      - us-east-2c
+      - --------
+      - us-west-1a
+      - us-west-1b
+      - -------
+      - us-west-2a
+      - us-west-2b
+      - us-west-2c
+      - us-west-2d
+      - ------
+
+  Subnet2AZ:
+    Type: String
+    Description: Availability Zone for the second public subnet
+    Default: us-east-1b
+    AllowedValues:
+      - ----------
+      - us-east-1a
+      - us-east-1b
+      - us-east-1c
+      - us-east-1d
+      - ---------
+      - us-east-2a
+      - us-east-2b
+      - us-east-2c
+      - --------
+      - us-west-1a
+      - us-west-1b
+      - -------
+      - us-west-2a
+      - us-west-2b
+      - us-west-2c
+      - us-west-2d
+      - ------
+
+  # ARNs and IDs
+  EC2InstanceProfile:
+    Type: String
+    Description: The name of the instance profile to be attached to the EC2 instances
+    Default: LabInstanceProfile
+
+  AUTOSCALINGTARGET:
+    Type: Number
+    Description: The Target Value for Target Tracking Scaling Policy
+    Default: '75'
+
+  EC2INSTANCEAMIID:
+    Type: String
+    Description: The AMI ID for the EC2 instances
+    Default: ami-0e2c8caa4b6378d8c
+  
+  EC2INSTANCE2AMIID:
+    Type: String
+    Description: The AMI ID for the EC2 instances
+    Default: ami-0e2c8caa4b6378d8c
+
+  INSTANCETYPE: 
+    Type: String
+    Description: The instance type for the EC2 instances (t2.micro, t2.small, t2.medium, etc.)
+    Default: t2.micro
+
+  INSTANCETYPE2:
+    Type: String
+    Description: The instance type for the EC2 instances in Phase 2 (t2.micro, t2.small, t2.medium, etc.)
+    Default: t2.micro
+
+  INSTANCETYPE3:
+    Type: String
+    Description: The instance type for the EC2 instances in Phase 3 (t2.micro, t2.small, t2.medium, etc.)
+    Default: t2.micro
+
+  DBINSTANCETYPE:
+    Type: String
+    Description: The instance type for the RDS database instance (db.t3.micro, db.t3.small, db.t3.medium, etc.)
+    Default: db.t3.micro
+
+  STACKURL:
+    Type: String
+    Description: The URL of the Phase 2 CloudFormation stack
+    Default: https://cf-templates-1tikuo0xg0q4q-us-east-1.s3.us-east-1.amazonaws.com/
+    
+  # Names
+  VPCName:
+    Type: String
+    Description: VPC name
+    Default: Inventory-VPC
+
+  PubSubnet1Name:
+    Type: String
+    Description: Public subnet 1 name
+    Default: Inv-Pub-Sub1
+
+  PubSubnet2Name:
+    Type: String
+    Description: Public subnet 2 name
+    Default: Inv-Pub-Sub2
+  
+  PrivSubnet1Name:
+    Type: String
+    Description: Private subnet 1 name
+    Default: Inv-Priv-Sub1
+
+  PrivSubnet2Name:
+    Type: String
+    Description: Private subnet 2 name
+    Default: Inv-Priv-Sub2
+
+  DBSubnet1Name:
+    Type: String
+    Description: Database subnet 1 name
+    Default: Inv-DB-Sub1
+
+  DBSubnet2Name:
+    Type: String
+    Description: Database subnet 2 name
+    Default: Inv-DB-Sub2
+
+  EC2V1SGName:
+    Type: String
+    Description: EC2 security group 1 name
+    Default: EC2-V1-SG
+
+  EC2V2SGName:
+    Type: String
+    Description: EC2 security group 2 name
+    Default: EC2-V2-SG
+
+  ASGSGName:
+    Type: String
+    Description: Auto Scaling Group security group name
+    Default: ASG-V3-SG
+
+  LBSGName:
+    Type: String
+    Description: Load Balancer security group name
+    Default: LB-V3-SG
+
+  DBSGName:
+    Type: String
+    Description: Database security group name
+    Default: DB-SG
+
+  CLOUD9SGNAME:
+    Type: String
+    Description: EC2 security group 1 name
+    Default: Cloud9-SG
+
+  EC2V1NAME:
+    Type: String
+    Description: EC2 instance 1 name
+    Default: Inventory-V1
+
+  EC2V2NAME:
+    Type: String
+    Description: EC2 instance 2 name
+    Default: Inventory-V2
+
+  EC2V3NAME:
+    Type: String
+    Description: EC2 instance 3 name
+    Default: Inventory-V3
+
+  ASGNAME:
+    Type: String
+    Description: Auto Scaling Group name
+    Default: Inventory-V3-ASG
+
+  DBINSTANCEIDENTIFIER:
+    Type: String
+    Description: The name of the RDS database instance
+    Default: InventoryDB
+
+  CLOUD9INSTANCENAME:
+    Type: String
+    Description: Cloud9 instance name
+    Default: Cloud9-Instance
+
+  PUBLICKEYPAIRNAME:
+    Type: String
+    Description: The name of EC2 Key Pair to enable SSH access to public instances
+    Default: Pub-EC2-Key-Pair
+
+  PRIVATEKEYPAIRNAME:
+    Type: String
+    Description: The name of EC2 Key Pair to enable SSH access to private instances
+    Default: Priv-EC2-Key-Pair
+
+  # Secrets
+  DBSECRETNAME:
+    Type: String
+    Description: The name of the database secret
+    Default: Mydbsecret
+
+  DBSECRETUSER:
+    Type: String
+    Description: The username for the database secret
+    Default: nodeapp
+
+  DBSECRETPASSWORD:
+    Type: String
+    Description: The password for the database secret
+    Default: student12
+
+  DBSECRETDBNAME:
+    Type: String
+    Description: The database name for the database secret
+    Default: STUDENTS
+
+  DBSECRETDESCRIPTION:
+    Type: String
+    Description: The description for the database secret
+    Default: Database secret for web app
+
+  # CIDR blocks
+  VPCCIDR:
+    Type: String
+    Description: VPC CIDR block
+    Default: 192.168.0.0/16
+
+  PubSubnet1CIDR:
+    Type: String
+    Description: Public subnet 1 CIDR block
+    Default: 192.168.1.0/24
+
+  PubSubnet2CIDR:
+    Type: String
+    Description: Public subnet 2 CIDR block
+    Default: 192.168.2.0/24
+
+  PrivSubnet1CIDR:
+    Type: String
+    Description: Private subnet 1 CIDR block
+    Default: 192.168.3.0/24
+
+  PrivSubnet2CIDR:
+    Type: String
+    Description: Private subnet 2 CIDR block
+    Default: 192.168.4.0/24
+
+  DBSubnet1CIDR:
+    Type: String
+    Description: Database subnet 1 CIDR block
+    Default: 192.168.5.0/24
+
+  DBSubnet2CIDR:
+    Type: String
+    Description: Database subnet 2 CIDR block
+    Default: 192.168.6.0/24
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Region and Availability Zones"
+        Parameters:
+          - AWSRegion
+          - Subnet1AZ
+          - Subnet2AZ
+      - Label:
+          default: "Very Important Parameters"  
+        Parameters:
+          - STACKURL
+          - EC2InstanceProfile
+          - AUTOSCALINGTARGET
+          - EC2INSTANCEAMIID
+          - EC2INSTANCE2AMIID
+          - INSTANCETYPE
+          - INSTANCETYPE2
+          - INSTANCETYPE3
+          - DBINSTANCETYPE
+
+
+      - Label:
+          default: "VPC Names"
+        Parameters:
+          - VPCName
+          - PubSubnet1Name
+          - PubSubnet2Name
+          - PrivSubnet1Name
+          - PrivSubnet2Name
+          - DBSubnet1Name
+          - DBSubnet2Name
+      - Label:
+          default: "Security Group Names"
+        Parameters:
+          - EC2V1SGName
+          - EC2V2SGName
+          - ASGSGName
+          - LBSGName
+          - DBSGName
+          - CLOUD9SGNAME
+      - Label:
+          default: "Instance Related Names"
+        Parameters:
+          - EC2V1NAME
+          - EC2V2NAME
+          - EC2V3NAME
+          - DBINSTANCEIDENTIFIER
+          - CLOUD9INSTANCENAME
+          - ASGNAME
+          - PUBLICKEYPAIRNAME
+          - PRIVATEKEYPAIRNAME
+      - Label:
+          default: "CIDR Blocks"
+        Parameters:
+          - VPCCIDR
+          - PubSubnet1CIDR
+          - PubSubnet2CIDR
+          - PrivSubnet1CIDR
+          - PrivSubnet2CIDR
+          - DBSubnet1CIDR
+          - DBSubnet2CIDR
+      - Label:
+          default: "Secrets"
+        Parameters:
+          - DBSECRETNAME
+          - DBSECRETUSER
+          - DBSECRETPASSWORD
+          - DBSECRETDBNAME
+          - DBSECRETDESCRIPTION
+    ParameterLabels:
+      AWSRegion:
+        default: "AWS Region"
+      Subnet1AZ:
+        default: "Subnet 1 Availability Zone"
+      Subnet2AZ:
+        default: "Subnet 2 Availability Zone"
+      EC2InstanceProfile:
+        default: "EC2 Instance Profile"
+      AUTOSCALINGTARGET:
+        default: "Auto Scaling CPU Utilization Target %age"
+      EC2INSTANCEAMIID:
+        default: "EC2 AMI ID for Server V1"
+      EC2INSTANCE2AMIID:
+        default: "EC2 AMI ID for Server V2"
+      INSTANCETYPE:
+        default: "Phase1: Instance Type for Server V1"
+      INSTANCETYPE2:
+        default: "Phase2: Instance Type for Server V2"
+      INSTANCETYPE3:
+        default: "Phase3: Instance Type for Auto Scaling Group"
+      DBINSTANCETYPE:
+        default: "RDS Instance Type"
+      VPCName:
+        default: "VPC Name"
+      PubSubnet1Name:
+        default: "Public Subnet 1 Name"
+      PubSubnet2Name:
+        default: "Public Subnet 2 Name"
+      PrivSubnet1Name:
+        default: "Private Subnet 1 Name"
+      PrivSubnet2Name:
+        default: "Private Subnet 2 Name"
+      EC2V1SGName:
+        default: "EC2 Security Group Name  for Server V1"
+      EC2V2SGName:
+        default: "EC2 Security Group Name for Server V2"
+      ASGSGName:
+        default: "Auto Scaling Group Security Group Name"
+      LBSGName:
+        default: "Load Balancer Security Group Name"
+      DBSGName:
+        default: "RDS Database Security Group Name"
+      CLOUD9SGNAME:
+        default: "Cloud9 Security Group Name"
+      EC2V1NAME:
+        default: "Instance Name for Server V1"
+      EC2V2NAME:
+        default: "Instance Name for Server V2"
+      EC2V3NAME:
+        default: "Instance Name for Auto Scaling Group" 
+      DBINSTANCEIDENTIFIER:
+        default: "RDS Database Name"
+      CLOUD9INSTANCENAME:
+        default: "Cloud9 Instance Name"
+      ASGNAME:
+        default: "Auto Scaling Group Name"
+      PUBLICKEYPAIRNAME:
+        default: " Key Pair Name for Public Instances"
+      PRIVATEKEYPAIRNAME:
+        default: "Key Pair Name for Private Instances"
+      VPCCIDR:
+        default: "VPC CIDR Block"
+      PubSubnet1CIDR:
+        default: "Public Subnet 1 CIDR"
+      PubSubnet2CIDR:
+        default: "Public Subnet 2 CIDR"
+      PrivSubnet1CIDR:
+        default: "Private Subnet 1 CIDR"
+      PrivSubnet2CIDR:
+        default: "Private Subnet 2 CIDR"
+      DBSECRETNAME:
+        default: "Database Secret Name"
+      DBSECRETUSER:
+        default: "Database Secret Username"
+      DBSECRETPASSWORD:
+        default: "Database Secret Password"
+      DBSECRETDBNAME:
+        default: "Database Secret Database Name"
+      DBSECRETDESCRIPTION:
+        default: "Database Secret Description"
+
+Resources:
+  MainVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref VPCName
+
+  # -----------------------------------------------------------
+  # VPC Attachments
+  # -----------------------------------------------------------
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref VPCName, 'IGW' ] ]
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MainVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  NatEIP1:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref VPCName, 'EIP1' ] ]
+
+  NatEIP2:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref VPCName, 'EIP2' ] ]
+
+
+  NatGateway1:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt NatEIP1.AllocationId
+      SubnetId: !Ref PubSubnet1
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref Subnet1AZ , 'NAT' ] ]
+  
+  NatGateway2:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt NatEIP2.AllocationId
+      SubnetId: !Ref PubSubnet2
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref Subnet2AZ , 'NAT' ] ]
+  
+  # -----------------------------------------------------------
+  # VPC Subnets
+  # -----------------------------------------------------------
+  PubSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MainVPC
+      CidrBlock: !Ref PubSubnet1CIDR
+      AvailabilityZone: !Ref Subnet1AZ
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Ref PubSubnet1Name
+
+  PubSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref MainVPC
+      CidrBlock: !Ref PubSubnet2CIDR
+      AvailabilityZone: !Ref Subnet2AZ
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Ref PubSubnet2Name
+
+  PrivSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MainVPC
+      CidrBlock: !Ref PrivSubnet1CIDR
+      AvailabilityZone: !Ref Subnet1AZ
+      Tags:
+        - Key: Name
+          Value: !Ref PrivSubnet1Name
+
+  PrivSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MainVPC
+      CidrBlock: !Ref PrivSubnet2CIDR
+      AvailabilityZone: !Ref Subnet2AZ
+      Tags:
+        - Key: Name
+          Value: !Ref PrivSubnet2Name
+  
+  PubRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MainVPC
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref VPCName
+              - Pub-Route-Table
+                
+  PrivateRouteTable1:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref MainVPC
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref VPCName, 'Priv-Route-Table1' ] ]
+
+  PrivateRouteTable2:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref MainVPC
+      Tags:
+        - Key: Name
+          Value: !Join [ '-', [ !Ref VPCName, 'Priv-Route-Table2' ] ]
+    
+
+
+  # -----------------------------------------------------------
+  # Route Table Associations
+  # -----------------------------------------------------------
+  PubRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PubSubnet1
+      RouteTableId: !Ref PubRouteTable
+
+  PubRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PubSubnet2
+      RouteTableId: !Ref PubRouteTable
+
+  PrivRouteTableAssociation1:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivRouteTableAssociation2:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+  # Route Table Routes
+  PubRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PubRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  
+# Route Table Routes
+  PrivateRoute1:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateRoute2:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway2
+      
+  # -----------------------------------------------------------
+  # 2) Create a Key Pair
+  # -----------------------------------------------------------
+  PubKeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Ref PUBLICKEYPAIRNAME
+      Tags:
+        - Key: Name
+          Value: !Ref PUBLICKEYPAIRNAME
+
+  # -----------------------------------------------------------
+  # Security Groups
+  # -----------------------------------------------------------
+  EC2V1SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "EC2V1 Security Group"
+      VpcId: !Ref MainVPC
+      Tags:
+        - Key: Name
+          Value: !Ref EC2V1SGName
+        
+  Cloud9SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Cloud9 Security Group
+      VpcId: !Ref MainVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !GetAtt EC2V1SecurityGroup.GroupId
+      Tags:
+        - Key: Name
+          Value: !Ref CLOUD9SGNAME
+
+
+  EC2V1SecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EC2V1SecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      SourceSecurityGroupId: !GetAtt Cloud9SecurityGroup.GroupId
+
+  EC2V1SecurityGroupIngress2:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EC2V1SecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: 0.0.0.0/0
+  # -----------------------------------------------------------
+  # Instances
+  # -----------------------------------------------------------
+  Cloud9Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-01816d07b1128cd2d
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: false
+          DeviceIndex: '0'
+          GroupSet:
+            - !GetAtt Cloud9SecurityGroup.GroupId
+          SubnetId: !Ref PrivSubnet1
+
+      Tags:
+        - Key: Name
+          Value: !Ref CLOUD9INSTANCENAME
+
+  EC2V1Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref INSTANCETYPE
+      ImageId: !Ref EC2INSTANCEAMIID
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      KeyName: !Ref PubKeyPair
+
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: '0'
+          GroupSet:
+            - !GetAtt EC2V1SecurityGroup.GroupId
+          SubnetId: !Ref PubSubnet2
+      
+      Tags:
+        - Key: Name
+          Value: !Ref EC2V1NAME
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          apt update -y
+          apt install nodejs unzip wget npm mysql-server -y
+          #wget https://aws-tc-largeobjects.s3.us-west-2.amazonaws.com/CUR-TF-200-ACCAP1-1-DEV/code.zip -P /home/ubuntu
+          wget https://aws-tc-largeobjects.s3.us-west-2.amazonaws.com/CUR-TF-200-ACCAP1-1-91571/1-lab-capstone-project-1/code.zip -P /home/ubuntu
+          cd /home/ubuntu
+          unzip code.zip -x "resources/codebase_partner/node_modules/*"
+          cd resources/codebase_partner
+          npm install aws aws-sdk
+          mysql -u root -e "CREATE USER 'nodeapp' IDENTIFIED WITH mysql_native_password BY 'student12'";
+          mysql -u root -e "GRANT all privileges on *.* to 'nodeapp'@'%';"
+          mysql -u root -e "CREATE DATABASE STUDENTS;"
+          mysql -u root -e "USE STUDENTS; CREATE TABLE students(
+                      id INT NOT NULL AUTO_INCREMENT,
+                      name VARCHAR(255) NOT NULL,
+                      address VARCHAR(255) NOT NULL,
+                      city VARCHAR(255) NOT NULL,
+                      state VARCHAR(255) NOT NULL,
+                      email VARCHAR(255) NOT NULL,
+                      phone VARCHAR(100) NOT NULL,
+                      PRIMARY KEY ( id ));"
+          sed -i 's/.*bind-address.*/bind-address = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf
+          systemctl enable mysql
+          service mysql restart
+          export APP_DB_HOST=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+          export APP_DB_USER=nodeapp
+          export APP_DB_PASSWORD=student12
+          export APP_DB_NAME=STUDENTS
+          export APP_PORT=80
+          npm start &
+          echo '#!/bin/bash -xe
+          cd /home/ubuntu/resources/codebase_partner
+          export APP_PORT=80
+          npm start' > /etc/rc.local
+          chmod +x /etc/rc.local
+
+  Phase2Stack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Join [ '', [ !Ref STACKURL, 'Phase2.yml' ] ]
+      Parameters:
+        MainVPC: !Ref MainVPC
+        VPCName: !Ref VPCName
+
+        Subnet1AZ: !Ref Subnet1AZ
+        Subnet2AZ: !Ref Subnet2AZ
+
+        DBSubnet1CIDR: !Ref DBSubnet1CIDR
+        DBSubnet2CIDR: !Ref DBSubnet2CIDR
+        DBSubnet1Name: !Ref DBSubnet1Name
+        DBSubnet2Name: !Ref DBSubnet2Name
+
+        PUBLICKEYPAIRNAME: !Ref PUBLICKEYPAIRNAME
+        PRIVATEKEYPAIRNAME: !Ref PRIVATEKEYPAIRNAME
+
+        Cloud9SecurityGroup: !GetAtt Cloud9SecurityGroup.GroupId
+
+        INSTANCETYPE2: !Ref INSTANCETYPE2
+        INSTANCETYPE3: !Ref INSTANCETYPE3
+        DBINSTANCETYPE: !Ref DBINSTANCETYPE
+        EC2INSTANCE2AMIID: !Ref EC2INSTANCE2AMIID
+        EC2InstanceProfile: !Ref EC2InstanceProfile
+        EC2V2NAME: !Ref EC2V2NAME
+        EC2V3NAME: !Ref EC2V3NAME
+        ASGNAME: !Ref ASGNAME
+        RDSINSTANCEIDENTIFIER: !Ref DBINSTANCEIDENTIFIER
+        AUTOSCALINGTARGET: !Ref AUTOSCALINGTARGET
+        
+        EC2V2SGNAME: !Ref EC2V2SGName
+        ASGSGName: !Ref ASGSGName
+        LBSGName: !Ref LBSGName
+        DBSGName: !Ref DBSGName
+
+        PubSubnet1: !Ref PubSubnet1
+        PubSubnet2: !Ref PubSubnet2
+        PrivSubnet1: !Ref PrivSubnet1
+        PrivSubnet2: !Ref PrivSubnet2
+
+        SECRETNAME: !Ref DBSECRETNAME
+        SECRETUSERNAME: !Ref DBSECRETUSER
+        SECRETPASSWORD: !Ref DBSECRETPASSWORD
+        SECRETDBNAME: !Ref DBSECRETDBNAME
+        SECRETDESCRIPTION: !Ref DBSECRETDESCRIPTION
+
+        PHASE3STACKURL: !Join [ '', [ !Ref STACKURL, 'Phase3.yml' ] ]
+
+# Outputs
+Outputs:
+  EC2V1InstancePublicIP:
+    Description: The public IP of the EC2 instance
+    Value: !GetAtt EC2V1Instance.PublicIp
