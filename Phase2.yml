@@ -24,6 +24,8 @@ Parameters:
     Type: String
   PUBLICKEYPAIRNAME:
     Type: String
+  EPHEMERALBUCKETNAME:
+    Type: String
 
   EC2V2SGNAME:
     Type: String
@@ -32,6 +34,8 @@ Parameters:
   DBSGName:
     Type: String
   ASGSGName:
+    Type: String
+  EphemeralSG:
     Type: String
 
   # EC2 instance parameters
@@ -100,6 +104,7 @@ Resources:
   # -----------------------------------------------------------
   # VPC Subnets
   # -----------------------------------------------------------
+      
   DBSubnet1:
     Type: 'AWS::EC2::Subnet'
     Properties:
@@ -244,20 +249,7 @@ Resources:
   # -----------------------------------------------------------
   # Instances
   # -----------------------------------------------------------
-  EphemeralSG:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "Security Group for Ephemeral EC2"
-      VpcId: !Ref MainVPC
-      # Example: allow ephemeral to SSH out. Also allow ephemeral to receive SSH if needed.
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          SourceSecurityGroupId: !Ref EC2V1SecurityGroup
-      Tags:
-        - Key: Name
-          Value: "EphemeralSG"
+
 
   EC2V1SecurityGroupIngressEphemeral:
     Type: AWS::EC2::SecurityGroupIngress
@@ -266,12 +258,12 @@ Resources:
       IpProtocol: tcp
       FromPort: 22
       ToPort: 22
-      SourceSecurityGroupId: !GetAtt EphemeralSG.GroupId
+      SourceSecurityGroupId: !Ref EphemeralSG
 
   EphemeralSGIngressDB:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      GroupId: !GetAtt EphemeralSG.GroupId
+      GroupId: !Ref EphemeralSG
       IpProtocol: tcp
       FromPort: 3306
       ToPort: 3306
@@ -284,9 +276,9 @@ Resources:
       IpProtocol: tcp
       FromPort: 3306
       ToPort: 3306
-      SourceSecurityGroupId: !GetAtt EphemeralSG.GroupId
+      SourceSecurityGroupId: !Ref EphemeralSG
 
-  EphemeralEC2Instance:
+  EphemeralEC2Instance2:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
@@ -299,7 +291,6 @@ Resources:
       Tags:
         - Key: Name
           Value: "EPHEMERAL-EC2"
-
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
@@ -316,21 +307,21 @@ Resources:
           # ----------------------------------------------------------
           # 2) OBTAIN SSH PRIVATE KEY FROM S3
           # ----------------------------------------------------------
-          wget ${STACKURL}${PUBLICKEYPAIRNAME}.pem -O ec2v1_key.pem
-          chmod 400 ec2v1_key.pem
+          aws s3 cp s3://${EPHEMERALBUCKETNAME}/${PUBLICKEYPAIRNAME}.pem /home/ubuntu/${PUBLICKEYPAIRNAME}.pem
+          chmod 400 ${PUBLICKEYPAIRNAME}.pem
           # ----------------------------------------------------------
           # 2) CREATE MySQL DUMP ON EC2V1, THEN COPY BACK TO EPHEMERAL_EC2
           # ----------------------------------------------------------
           echo "Creating MySQL dump on EC2V1..."
           
           ssh -o "StrictHostKeyChecking=no" \
-              -i ec2v1_key.pem \
+              -i ${PUBLICKEYPAIRNAME}.pem \
               ubuntu@${EC2V1PrivateIP} \
               "mysqldump -h localhost -u nodeapp -pstudent12 --databases STUDENTS > /tmp/data.sql"
 
           echo "MySQL dump created on EC2V1. Copying data.sql to EphemeralEC2..."
           scp -o "StrictHostKeyChecking=no" \
-              -i ec2v1_key.pem \
+              -i ${PUBLICKEYPAIRNAME}.pem \
               ubuntu@${EC2V1PrivateIP}:/tmp/data.sql /tmp/data.sql
 
           # ----------------------------------------------------------
@@ -344,7 +335,6 @@ Resources:
           # Optional: self-terminate after completion:
           # shutdown -h now
     DependsOn:
-      - EphemeralSG
       - EC2V2Instance
       - RDSInstance
       
