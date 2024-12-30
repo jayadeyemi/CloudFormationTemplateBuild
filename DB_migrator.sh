@@ -29,10 +29,10 @@
 # 1) Retrieve EC2V1 Private IP
 # ----------------------------------------------------------
 
-EC2V1PrivateIP=aws ec2 describe-instances \
-    --filters "Name=tag:Name,Values=MyInstance" \
+EC2V1PrivateIP=$(aws ec2 describe-instances \
+    --filters "Name=tag:Phase,Values=1" \
     --query "Reservations[*].Instances[*].PrivateIpAddress" \
-    --output text
+    --output text)
 
 # ----------------------------------------------------------
 # 2) Retrieve RDS Credentials from Secrets Manager
@@ -53,6 +53,8 @@ chmod 400 ec2v1_key.pem
 # 4) Verify Retrieved Data for User
 # ----------------------------------------------------------
 echo "RDS Username: $SECRET_USERNAME"
+echo "RDS Password: $SECRET_PASSWORD"
+echo "EC2V1 Private IP: $EC2V1PrivateIP"
 echo "RDS Endpoint: $RDS_ENDPOINT"
 echo "RDS Database: $RDS_DB_NAME"
 echo "SSH Key saved to ec2v1_key.pem"
@@ -62,7 +64,7 @@ echo "SSH Key saved to ec2v1_key.pem"
 # ----------------------------------------------------------
 
 echo "############################################################################################################"
-echo "#------------------------------------Creating MySQL dump on EC2V1------------------------------------------#"
+echo "#--------------------------------------Creating MySQL dump on EC2V1----------------------------------------#"
 echo "############################################################################################################"
 ssh -o "StrictHostKeyChecking=no" \
     -i ec2v1_key.pem \
@@ -70,20 +72,18 @@ ssh -o "StrictHostKeyChecking=no" \
     "mysqldump -h localhost -u nodeapp -pstudent12 --databases STUDENTS > /tmp/data.sql"
 
 echo "############################################################################################################"
-echo "#---------------------MySQL dump created on EC2V1. Copying data.sql to EphemeralEC2------------------------#"
+echo "#---------------------------------------Copying data.sql to Cloud9-----------------------------------------#"
 echo "############################################################################################################"
 scp -o "StrictHostKeyChecking=no" \
     -i ec2v1_key.pem \
     ubuntu@$EC2V1PrivateIP:/tmp/data.sql data.sql
 
 echo "############################################################################################################"
-echo "#--------------------------------------IMPORT MySQL DUMP INTO RDS------------------------------------------#"
+echo "#-------------------------------------IMPORTING MySQL DUMP INTO RDS----------------------------------------#"
 echo "############################################################################################################"
-echo "Importing MySQL dump into RDS from EphemeralEC2..."
-mysql -h $RDS_Endpoint -u $SECRETUSERNAME -p$SECRETPASSWORD -e "CREATE DATABASE STUDENTS;"
-mysql -h $RDS_Endpoint -u $SECRETUSERNAME -p$SECRETPASSWORD $RDS_DB_NAME < data.sql
+mysql -h $RDS_ENDPOINT -u $SECRET_USERNAME -p$SECRET_PASSWORD -e "CREATE DATABASE STUDENTS;"
+mysql -h $RDS_ENDPOINT -u $SECRET_USERNAME -p$SECRET_PASSWORD $RDS_DB_NAME < data.sql
 
 echo "############################################################################################################"
-echo "#------------------------------MySQL DUMP IMPORTED INTO RDS SUCESSFULLY------------------------------------#"
+echo "#-------------------------------------END OF SCRIPT; CHECK FOR ERRORS---------------------------------------#"
 echo "############################################################################################################"
-echo "End of Script"

@@ -299,7 +299,8 @@ Resources:
       Tags:
         - Key: Name
           Value: "EPHEMERAL-EC2"
-
+        - Key: Phase
+          Value: '2'
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash

@@ -192,6 +192,9 @@ Resources:
         - Key: Name
           Value: !Ref EC2V3NAME
           PropagateAtLaunch: true
+        - Key: Phase
+          Value: '3'
+          PropagateAtLaunch: true
     DependsOn:
       - LaunchTemplate
       - TargetGroup

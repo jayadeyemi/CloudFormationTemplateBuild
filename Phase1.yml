@@ -649,17 +649,17 @@ Resources:
       ImageId: !Ref EC2INSTANCEAMIID
       IamInstanceProfile: !Ref EC2InstanceProfile
       KeyName: !Ref PUBLICKEYPAIRNAME
-
       NetworkInterfaces:
         - AssociatePublicIpAddress: true
           DeviceIndex: '0'
           GroupSet:
             - !GetAtt EC2V1SecurityGroup.GroupId
           SubnetId: !Ref PubSubnet2
-      
       Tags:
         - Key: Name
           Value: !Ref EC2V1NAME
+        - Key: Phase
+          Value: '1'
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
