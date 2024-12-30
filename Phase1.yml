@@ -103,10 +103,10 @@ Parameters:
     Description: The instance type for the RDS database instance (db.t3.micro, db.t3.small, db.t3.medium, etc.)
     Default: db.t3.micro
 
-  EPHEMERALBUCKETNAME:
+  STACKURL:
     Type: String
-    Description: The name of the S3 bucket to store the stacks (lowercase, unique within a region).
-    Default: deploystacks4596
+    Description: The URL of the CloudFormation template for Phase 2
+    Default: https://cf-8569.s3.us-east-1.amazonaws.com/
     
   # Names
   VPCName:
@@ -283,7 +283,7 @@ Metadata:
       - Label:
           default: "Very Important Parameters"  
         Parameters:
-          - EPHEMERALBUCKETNAME
+          - STACKURL
           - EC2InstanceProfile
           - AUTOSCALINGTARGET
           - EC2INSTANCEAMIID
@@ -420,8 +420,8 @@ Metadata:
         default: "Database Secret Database Name"
       DBSECRETDESCRIPTION:
         default: "Database Secret Description"
-      EPHEMERALBUCKETNAME:
-        default: "Ephemeral S3 Bucket Name"
+      STACKURL:
+        default: "S3 URL"
 Resources:
   MainVPC:
     Type: AWS::EC2::VPC
@@ -432,91 +432,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref VPCName
-  EphemeralS3Bucket:
-    Type: 'AWS::S3::Bucket'
-    Properties:
-      BucketName: !Ref EPHEMERALBUCKETNAME
-      AccessControl: Private
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-  EphemeralSG:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "Security Group for Ephemeral EC2"
-      VpcId: !Ref MainVPC
-      # Example: allow ephemeral to SSH out. Also allow ephemeral to receive SSH if needed.
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          SourceSecurityGroupId: !Ref EC2V1SecurityGroup
-      Tags:
-        - Key: Name
-          Value: "EphemeralSG"
-
-  S3VpcEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
-      VpcId: !Ref MainVPC
-      VpcEndpointType: Gateway
-      RouteTableIds:
-        - !Ref PubRouteTable
-        - !Ref PrivateRouteTable1
-        - !Ref PrivateRouteTable2
-
-  EphemeralS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref EphemeralS3Bucket
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Sid: AllowVPCeAccess
-            Effect: Allow
-            Principal: "*"
-            Action:
-              - s3:GetObject
-              - s3:PutObject
-            Resource: !Sub "${EphemeralS3Bucket.Arn}/*"
-            Condition:
-              StringEquals:
-                aws:SourceVpce: !Ref S3VpcEndpoint 
-  EphemeralInstance1:
-    Type: 'AWS::EC2::Instance'
-    Properties:
-      InstanceType: t2.micro
-      ImageId: !Ref EC2INSTANCE2AMIID
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      SubnetId: !Ref PubSubnet1
-      KeyName: !Ref PUBLICKEYPAIRNAME
-      SecurityGroupIds:
-        - !Ref EphemeralSG
-      Tags:
-        - Key: Name
-          Value: "EPHEMERAL-EC2"
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          apt update -y
-          apt install -y awscli jq
-          # Clone your GitHub repo
-          cd /home/ubuntu
-          git clone https://github.com/jayadeyemi/CloudFormationTemplateBuild.git /home/ubuntu/CFN
-
-          # Upload the cloned repo to S3
-          aws s3 sync /home/ubuntu/CFN s3://${EPHEMERALBUCKETNAME}/CloudFormationTemplateBuild
-          
-          # Create Public and Private Key Pair on AWS
-          aws ec2 create-key-pair --key-name ${PUBLICKEYPAIRNAME} --query 'KeyMaterial' --output text > /home/ubuntu/${PUBLICKEYPAIRNAME}.pem
-          aws ec2 create-key-pair --key-name ${PRIVATEKEYPAIRNAME} --query 'KeyMaterial' --output text > /home/ubuntu/${PRIVATEKEYPAIRNAME}.pem
-          # Copy the public and private key pairs to S3
-          aws s3 cp /home/ubuntu/${PUBLICKEYPAIRNAME}.pem s3://${EPHEMERALBUCKETNAME}/CloudFormationTemplateBuild/${PUBLICKEYPAIRNAME}.pem
-          aws s3 cp /home/ubuntu/${PRIVATEKEYPAIRNAME}.pem s3://${EPHEMERALBUCKETNAME}/CloudFormationTemplateBuild/${PRIVATEKEYPAIRNAME}.pem
-
+ 
   # -----------------------------------------------------------
   # VPC Attachments
   # -----------------------------------------------------------
@@ -785,7 +701,7 @@ Resources:
   Phase2Stack:
     Type: 'AWS::CloudFormation::Stack'
     Properties:
-      TemplateURL: !Join [ '', [ 'https://', !Ref AWSRegion, '.s3.amazonaws.com/', !Ref EPHEMERALBUCKETNAME, '/CloudFormationTemplateBuild/Phase2.yml' ] ]
+      TemplateURL: !Join [ '', [ !Ref STACKURL, 'Phase2.yml' ] ]
       Parameters:
         MainVPC: !Ref MainVPC
         VPCName: !Ref VPCName
@@ -797,7 +713,6 @@ Resources:
         DBSubnet2CIDR: !Ref DBSubnet2CIDR
         DBSubnet1Name: !Ref DBSubnet1Name
         DBSubnet2Name: !Ref DBSubnet2Name
-        EPHEMERALBUCKETNAME: !Ref EPHEMERALBUCKETNAME
 
         PUBLICKEYPAIRNAME: !Ref PUBLICKEYPAIRNAME
         PRIVATEKEYPAIRNAME: !Ref PRIVATEKEYPAIRNAME
@@ -819,7 +734,6 @@ Resources:
         LBSGName: !Ref LBSGName
         DBSGName: !Ref DBSGName
         EC2V1SecurityGroup: !Ref EC2V1SecurityGroup.GroupId
-        EphemeralSG: !GetAtt EphemeralSG.GroupId
         PubSubnet1: !Ref PubSubnet1
         PubSubnet2: !Ref PubSubnet2
         PrivSubnet1: !Ref PrivSubnet1
@@ -833,8 +747,8 @@ Resources:
         EC2V1SecurityGroup: !GetAtt EC2V1SecurityGroup.GroupId
         EC2V1PrivateIP: !GetAtt EC2V1Instance.PrivateIp
 
-        PHASE3STACKURL: !Join [ '', [ 'https://', !Ref AWSRegion, '.s3.amazonaws.com/', !Ref EPHEMERALBUCKETNAME, '/CloudFormationTemplateBuild/Phase3.yml' ] ]
-        STACKURL: !Join [ '', [ 'https://', !Ref AWSRegion, '.s3.amazonaws.com/', !Ref EPHEMERALBUCKETNAME, '/CloudFormationTemplateBuild/Phase2.yml' ] ]
+        PHASE3STACKURL: !Join [ '', [ !Ref STACKURL, 'Phase3.yml' ] ]
+        STACKURL: !Join [ '', [ !Ref STACKURL, 'Phase2.yml' ] ]
     DependsOn: EC2V1Instance
 
 
