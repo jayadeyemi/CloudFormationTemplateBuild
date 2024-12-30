@@ -1,4 +1,4 @@
-# CloudFormation Workspace Documentation
+# Highly Available and Scalable Web Application CloudFormation Templates
 
 ## Overview
 
