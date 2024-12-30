@@ -106,7 +106,7 @@ Parameters:
   EPHEMERALBUCKETNAME:
     Type: String
     Description: The name of the S3 bucket to store the stacks (lowercase, unique within a region).
-    Default: Deploystacks4596
+    Default: deploystacks4596
     
   # Names
   VPCName:
