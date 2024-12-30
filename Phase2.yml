@@ -244,110 +244,110 @@ Resources:
   # -----------------------------------------------------------
   # Instances
   # -----------------------------------------------------------
-  EphemeralSG:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "Security Group for Ephemeral EC2"
-      VpcId: !Ref MainVPC
-      # Example: allow ephemeral to SSH out. Also allow ephemeral to receive SSH if needed.
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          SourceSecurityGroupId: !Ref EC2V1SecurityGroup
-      Tags:
-        - Key: Name
-          Value: "EphemeralSG"
+  # EphemeralSG:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: "Security Group for Ephemeral EC2"
+  #     VpcId: !Ref MainVPC
+  #     # Example: allow ephemeral to SSH out. Also allow ephemeral to receive SSH if needed.
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 22
+  #         ToPort: 22
+  #         SourceSecurityGroupId: !Ref EC2V1SecurityGroup
+  #     Tags:
+  #       - Key: Name
+  #         Value: "EphemeralSG"
 
-  EC2V1SecurityGroupIngressEphemeral:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !Ref EC2V1SecurityGroup
-      IpProtocol: tcp
-      FromPort: 22
-      ToPort: 22
-      SourceSecurityGroupId: !GetAtt EphemeralSG.GroupId
+  # EC2V1SecurityGroupIngressEphemeral:
+  #   Type: AWS::EC2::SecurityGroupIngress
+  #   Properties:
+  #     GroupId: !Ref EC2V1SecurityGroup
+  #     IpProtocol: tcp
+  #     FromPort: 22
+  #     ToPort: 22
+  #     SourceSecurityGroupId: !GetAtt EphemeralSG.GroupId
 
-  EphemeralSGIngressDB:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !GetAtt EphemeralSG.GroupId
-      IpProtocol: tcp
-      FromPort: 3306
-      ToPort: 3306
-      SourceSecurityGroupId: !GetAtt DBSecurityGroup.GroupId
+  # EphemeralSGIngressDB:
+  #   Type: AWS::EC2::SecurityGroupIngress
+  #   Properties:
+  #     GroupId: !GetAtt EphemeralSG.GroupId
+  #     IpProtocol: tcp
+  #     FromPort: 3306
+  #     ToPort: 3306
+  #     SourceSecurityGroupId: !GetAtt DBSecurityGroup.GroupId
 
-  DBSecurityGroupIngressEphemeral:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      GroupId: !GetAtt DBSecurityGroup.GroupId
-      IpProtocol: tcp
-      FromPort: 3306
-      ToPort: 3306
-      SourceSecurityGroupId: !GetAtt EphemeralSG.GroupId
+  # DBSecurityGroupIngressEphemeral:
+  #   Type: AWS::EC2::SecurityGroupIngress
+  #   Properties:
+  #     GroupId: !GetAtt DBSecurityGroup.GroupId
+  #     IpProtocol: tcp
+  #     FromPort: 3306
+  #     ToPort: 3306
+  #     SourceSecurityGroupId: !GetAtt EphemeralSG.GroupId
 
-  EphemeralEC2Instance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: t2.micro
-      ImageId: !Ref EC2INSTANCE2AMIID
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      SubnetId: !Ref PrivSubnet1
-      KeyName: !Ref PUBLICKEYPAIRNAME
-      SecurityGroupIds:
-        - !Ref EphemeralSG
-      Tags:
-        - Key: Name
-          Value: "EPHEMERAL-EC2"
-        - Key: Phase
-          Value: '2'
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
+  # EphemeralEC2Instance:
+  #   Type: AWS::EC2::Instance
+  #   Properties:
+  #     InstanceType: t2.micro
+  #     ImageId: !Ref EC2INSTANCE2AMIID
+  #     IamInstanceProfile: !Ref EC2InstanceProfile
+  #     SubnetId: !Ref PrivSubnet1
+  #     KeyName: !Ref PUBLICKEYPAIRNAME
+  #     SecurityGroupIds:
+  #       - !Ref EphemeralSG
+  #     Tags:
+  #       - Key: Name
+  #         Value: "EPHEMERAL-EC2"
+  #       - Key: Phase
+  #         Value: '2'
+  #     UserData:
+  #       Fn::Base64: !Sub |
+  #         #!/bin/bash
           
 
-          # ----------------------------------------------------------
-          # 1) INSTALL AWS CLI AND SSH CLIENT ON EPHEMERAL_EC2
-          # ----------------------------------------------------------
-          apt update -y
-          apt install -y awscli jq mysql-client openssh-client
+  #         # ----------------------------------------------------------
+  #         # 1) INSTALL AWS CLI AND SSH CLIENT ON EPHEMERAL_EC2
+  #         # ----------------------------------------------------------
+  #         apt update -y
+  #         apt install -y awscli jq mysql-client openssh-client
 
-          cd /home/ubuntu
-          sleep 10
-          # ----------------------------------------------------------
-          # 2) OBTAIN SSH PRIVATE KEY FROM S3
-          # ----------------------------------------------------------
-          wget ${STACKURL}${PUBLICKEYPAIRNAME}.pem -O ec2v1_key.pem
-          chmod 400 ec2v1_key.pem
-          # ----------------------------------------------------------
-          # 2) CREATE MySQL DUMP ON EC2V1, THEN COPY BACK TO EPHEMERAL_EC2
-          # ----------------------------------------------------------
-          echo "Creating MySQL dump on EC2V1..."
+  #         cd /home/ubuntu
+  #         sleep 10
+  #         # ----------------------------------------------------------
+  #         # 2) OBTAIN SSH PRIVATE KEY FROM S3
+  #         # ----------------------------------------------------------
+  #         wget ${STACKURL}${PUBLICKEYPAIRNAME}.pem -O ec2v1_key.pem
+  #         chmod 400 ec2v1_key.pem
+  #         # ----------------------------------------------------------
+  #         # 2) CREATE MySQL DUMP ON EC2V1, THEN COPY BACK TO EPHEMERAL_EC2
+  #         # ----------------------------------------------------------
+  #         echo "Creating MySQL dump on EC2V1..."
           
-          ssh -o "StrictHostKeyChecking=no" \
-              -i ec2v1_key.pem \
-              ubuntu@${EC2V1PrivateIP} \
-              "mysqldump -h localhost -u nodeapp -pstudent12 --databases STUDENTS > /tmp/data.sql"
+  #         ssh -o "StrictHostKeyChecking=no" \
+  #             -i ec2v1_key.pem \
+  #             ubuntu@${EC2V1PrivateIP} \
+  #             "mysqldump -h localhost -u nodeapp -pstudent12 --databases STUDENTS > /tmp/data.sql"
 
-          echo "MySQL dump created on EC2V1. Copying data.sql to EphemeralEC2..."
-          scp -o "StrictHostKeyChecking=no" \
-              -i ec2v1_key.pem \
-              ubuntu@${EC2V1PrivateIP}:/tmp/data.sql /tmp/data.sql
+  #         echo "MySQL dump created on EC2V1. Copying data.sql to EphemeralEC2..."
+  #         scp -o "StrictHostKeyChecking=no" \
+  #             -i ec2v1_key.pem \
+  #             ubuntu@${EC2V1PrivateIP}:/tmp/data.sql /tmp/data.sql
 
-          # ----------------------------------------------------------
-          # 3) IMPORT MySQL DUMP INTO RDS
-          # ----------------------------------------------------------
-          echo "Importing MySQL dump into RDS from EphemeralEC2..."
-          mysql -h ${RDSInstance.Endpoint.Address} -u ${SECRETUSERNAME} -p${SECRETPASSWORD} -e "CREATE DATABASE ${SECRETDBNAME};"
-          mysql -h ${RDSInstance.Endpoint.Address} -u ${SECRETUSERNAME} -p${SECRETPASSWORD} ${SECRETDBNAME} < /tmp/data.sql
+  #         # ----------------------------------------------------------
+  #         # 3) IMPORT MySQL DUMP INTO RDS
+  #         # ----------------------------------------------------------
+  #         echo "Importing MySQL dump into RDS from EphemeralEC2..."
+  #         mysql -h ${RDSInstance.Endpoint.Address} -u ${SECRETUSERNAME} -p${SECRETPASSWORD} -e "CREATE DATABASE ${SECRETDBNAME};"
+  #         mysql -h ${RDSInstance.Endpoint.Address} -u ${SECRETUSERNAME} -p${SECRETPASSWORD} ${SECRETDBNAME} < /tmp/data.sql
 
-          echo "All ephemeral tasks completed."
-          # Optional: self-terminate after completion:
-          # shutdown -h now
-    DependsOn:
-      - EphemeralSG
-      - EC2V2Instance
-      - RDSInstance
+  #         echo "All ephemeral tasks completed."
+  #         # Optional: self-terminate after completion:
+  #         # shutdown -h now
+  #   DependsOn:
+  #     - EphemeralSG
+  #     - EC2V2Instance
+  #     - RDSInstance
       
   EC2V2Instance:
     Type: AWS::EC2::Instance
