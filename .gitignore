@@ -50,3 +50,4 @@ rsconnect/
 
 PRIVATE.pem
 PUBLIC.pem
+CloudFormationTemplates.code-workspace
