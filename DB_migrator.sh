@@ -1,51 +1,89 @@
-# ----------------------------------------------------------
-# Variable Definitions
-# ----------------------------------------------------------
-# Contents of 
-# EC2 Instance Private IP Address (Modify as needed)
+#!/bin/bash -xe
+############################################################################################################
+# ---------------------------------------------------------------------------------------------------------#
+############################################################################################################
+# This script is used to migrate data from Phase 1 EC2 instance to RDS instance
+# Pre-requisites:
+# Create a Bucket in S3 and upload Phases 1, 2, and 3 scripts.
+# Manually create a key pair for EC2 instances in the public subnet.
+# Save the key pair details for the public EC2 instances
+# Transfer the details to Secrets Manager as detailed below:
+    # Secret Name: RSA_KEYS
+    # Secret Key: PUBLIC
+    # Secret Value: Details of the key pair
+    # Secret Key: PRIVATE
+    # Secret Value: Details of the key pair
 
-# RDS Instance Connection Details
-EC2V1PrivateIP="192.168.2.23"
-RDS_Endpoint=""
-SECRETUSERNAME=""
-SECRETPASSWORD=""
-
-aws secretsmanager get-secret-value --secret-id RSA_KEYS --query PUBLIC --output text > ec2v1_key.pem
-
-# Create a new Secret for RDS
-SECRET_USERNAME=aws secretsmanager get-secret-value --secret-id "Mydbsecret" --query 'SecretString.user' --output text
-SECRET_PASSWORD=aws secretsmanager get-secret-value --secret-id "Mydbsecret" --query 'SecretString.password' --output text
-RDS_ENDPOINT=aws secretsmanager get-secret-value --secret-id "Mydbsecret" --query 'SecretString.host' --output text
-SECRET_PASSWORD=aws secretsmanager get-secret-value --secret-id "Mydbsecret" --query 'SecretString.db' --output text
+# Open CloudFormation on the AWS Management Console
+# Choose Create Stack
+# Input the URL for Phase 1 script
+# Create your stack with your required details
+# Allow for CloudFormation to complete the stack creation
+# Once the stack is creation is complete, open the Public IP of the EC2 instance with its Inbuilt MySQL database
+# Input your data into the Database
+# Run this file to migrate the data from the EC2 instance to the RDS instance
+############################################################################################################
+# ---------------------------------------------------------------------------------------------------------#
+############################################################################################################
 # ----------------------------------------------------------
-# 2) OBTAIN SSH PRIVATE KEY FROM SECRETS MANAGER
+# 1) Retrieve EC2V1 Private IP
 # ----------------------------------------------------------
-aws secretsmanager get-secret-value \
-  --secret-id RSA_KEYS \
-  --query 'SecretString.PUBLIC' \ > ec2v1_key.pem
+
+EC2V1PrivateIP=aws ec2 describe-instances \
+    --filters "Name=tag:Name,Values=MyInstance" \
+    --query "Reservations[*].Instances[*].PrivateIpAddress" \
+    --output text
+
+# ----------------------------------------------------------
+# 2) Retrieve RDS Credentials from Secrets Manager
+# ----------------------------------------------------------
+SECRET_USERNAME=$(aws secretsmanager get-secret-value --secret-id "Mydbsecret" --query 'SecretString' --output text | jq -r '.user')
+SECRET_PASSWORD=$(aws secretsmanager get-secret-value --secret-id "Mydbsecret" --query 'SecretString' --output text | jq -r '.password')
+RDS_ENDPOINT=$(aws secretsmanager get-secret-value --secret-id "Mydbsecret" --query 'SecretString' --output text | jq -r '.host')
+RDS_DB_NAME=$(aws secretsmanager get-secret-value --secret-id "Mydbsecret" --query 'SecretString' --output text | jq -r '.db')
+
+# ----------------------------------------------------------
+# 3) Retrieve SSH Key from Secrets Manager save as read only
+# ----------------------------------------------------------
+aws secretsmanager get-secret-value --secret-id RSA_KEYS \
+    --query 'SecretString' --output text | jq -r '.PUBLIC' | sed 's/----- /-----\n/g; s/ -----/\n-----/g'> ec2v1_key.pem
 chmod 400 ec2v1_key.pem
-# # ----------------------------------------------------------
-# # 2) CREATE MySQL DUMP ON EC2V1, THEN COPY BACK TO EPHEMERAL_EC2
-# # ----------------------------------------------------------
-# echo "Creating MySQL dump on EC2V1..."
 
-# ssh -o "StrictHostKeyChecking=no" \
-#     -i ec2v1_key.pem \
-#     ubuntu@$EC2V1PrivateIP \
-#     "mysqldump -h localhost -u nodeapp -pstudent12 --databases STUDENTS > /tmp/data.sql"
+# ----------------------------------------------------------
+# 4) Verify Retrieved Data for User
+# ----------------------------------------------------------
+echo "RDS Username: $SECRET_USERNAME"
+echo "RDS Endpoint: $RDS_ENDPOINT"
+echo "RDS Database: $RDS_DB_NAME"
+echo "SSH Key saved to ec2v1_key.pem"
 
-# echo "MySQL dump created on EC2V1. Copying data.sql to EphemeralEC2..."
-# scp -o "StrictHostKeyChecking=no" \
-#     -i ec2v1_key.pem \
-#     ubuntu@$EC2V1PrivateIP:/tmp/data.sql data.sql
+# ----------------------------------------------------------
+# 5) Migration Process: EC2V1 -> Cloud9/CloudShell/Ephemeral EC2 Instance -> RDS
+# ----------------------------------------------------------
 
-# # ----------------------------------------------------------
-# # 3) IMPORT MySQL DUMP INTO RDS
-# # ----------------------------------------------------------
-# echo "Importing MySQL dump into RDS from EphemeralEC2..."
-# mysql -h $RDS_Endpoint -u $SECRETUSERNAME -p$SECRETPASSWORD -e "CREATE DATABASE STUDENTS;"
-# mysql -h $RDS_Endpoint -u $SECRETUSERNAME -p$SECRETPASSWORD STUDENTS < data.sql
+echo "############################################################################################################"
+echo "#------------------------------------Creating MySQL dump on EC2V1------------------------------------------#"
+echo "############################################################################################################"
+ssh -o "StrictHostKeyChecking=no" \
+    -i ec2v1_key.pem \
+    ubuntu@$EC2V1PrivateIP \
+    "mysqldump -h localhost -u nodeapp -pstudent12 --databases STUDENTS > /tmp/data.sql"
 
-# echo "All ephemeral tasks completed."
-# Optional: self-terminate after completion:
-# shutdown -h now
+echo "############################################################################################################"
+echo "#---------------------MySQL dump created on EC2V1. Copying data.sql to EphemeralEC2------------------------#"
+echo "############################################################################################################"
+scp -o "StrictHostKeyChecking=no" \
+    -i ec2v1_key.pem \
+    ubuntu@$EC2V1PrivateIP:/tmp/data.sql data.sql
+
+echo "############################################################################################################"
+echo "#--------------------------------------IMPORT MySQL DUMP INTO RDS------------------------------------------#"
+echo "############################################################################################################"
+echo "Importing MySQL dump into RDS from EphemeralEC2..."
+mysql -h $RDS_Endpoint -u $SECRETUSERNAME -p$SECRETPASSWORD -e "CREATE DATABASE STUDENTS;"
+mysql -h $RDS_Endpoint -u $SECRETUSERNAME -p$SECRETPASSWORD $RDS_DB_NAME < data.sql
+
+echo "############################################################################################################"
+echo "#------------------------------MySQL DUMP IMPORTED INTO RDS SUCESSFULLY------------------------------------#"
+echo "############################################################################################################"
+echo "End of Script"
