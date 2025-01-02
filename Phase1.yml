@@ -592,7 +592,7 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
   
-# Route Table Routes
+  # Route Table Routes
   PrivateRoute1:
     Type: 'AWS::EC2::Route'
     Properties:
@@ -618,7 +618,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref EC2V1SGName
-
 
   EC2V1SecurityGroupIngress2:
     Type: AWS::EC2::SecurityGroupIngress
